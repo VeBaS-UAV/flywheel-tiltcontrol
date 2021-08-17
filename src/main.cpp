@@ -92,10 +92,18 @@ void setup() {
 #endif
 
   pinMode(LED_PIN, OUTPUT);
-  pinMode(PWM_OUTPUT_PIN, OUTPUT);
   pinMode(PWM_INPUT_PIN, INPUT);
+  pinMode(PWM_OUTPUT_PIN, OUTPUT);
+  pinMode(PWM_OUTPUT_REVERSE_PIN, OUTPUT);
+
+  cli(); // clear global IRQ enable bit
 
   attachInterrupt(PWM_INPUT_IRQ_PIN, handle_pwm_input_interrupt, CHANGE);
+
+  GIMSK |= (1 << PCIE); // set pin change interrupt
+  PCMSK |= (1 << PWM_INPUT_IRQ_PIN); // set int bit
+
+  sei(); // enable global IRQ enable bit
 
   DEBUG_PRINTLN("init completed");
 }
@@ -110,6 +118,13 @@ int current_pwm_high_in_us() {
   }
 
   return 0;
+}
+
+// IRQ subroutine for arv irq handling
+ISR(PCINT0_vect)
+{
+    handle_pwm_input_interrupt();
+
 }
 
 int current_input_mode() {
@@ -159,6 +174,16 @@ int set_pwm(int mode_out) {
   DEBUG_PRINT("pwm duty value: ");
   DEBUG_PRINTLN(pwm_out_duty_value);
   analogWrite(PWM_OUTPUT_PIN, pwm_out_duty_value);
+
+  int delta_pwm = pwm - PWM_LOW;
+  int pwm_inv = PWM_HIGH - delta_pwm;
+
+  int pwm_out_duty_value_inv = convert_usec_to_duty_value(pwm_inv);
+
+  DEBUG_PRINT("pwm duty value (inv): ");
+  DEBUG_PRINTLN(pwm_out_duty_value_int);
+
+  analogWrite(PWM_OUTPUT_REVERSE_PIN, pwm_out_duty_value_inv);
 
   return 0;
 }

@@ -1,9 +1,10 @@
 #include <Arduino.h>
 
 #if defined(__AVR_ATtiny85__) || defined(__AVR_ATtiny45__)
-const int PWM_INPUT_PIN = PB2;   // attiny PB0
-const int PWM_INPUT_IRQ_PIN = 0; // Int 0 for pin 2 // attiny
-const int PWM_OUTPUT_PIN = PB0;  // attiny PB1
+const int PWM_INPUT_PIN = PB0;   // attiny PB0->leg 5
+const int PWM_INPUT_IRQ_PIN = PCINT0; // Int 0 for pin 2 // attiny
+const int PWM_OUTPUT_PIN = PB3;  // attiny PB3 -> leg 2
+const int PWM_OUTPUT_REVERSE_PIN = PB4;  // attiny PB4 -> leg 3
 const float PWM_FREQUENCY = 504; /* in Hz */
 const float PWM_RESOLUTION = 8;  /* in bit */
 const int LED_PIN = PB1;

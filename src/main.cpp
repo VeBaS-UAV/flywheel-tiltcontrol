@@ -17,7 +17,7 @@
   const int PWM_OUTPUT_PIN = 10;
   const float PWM_FREQUENCY = 488; /* in Hz */
   const float PWM_RESOLUTION = 8;  /* in bit */
-  const int LED_PIN = LED_BUILTIN;
+  // const int LED_PIN = LED_BUILTIN;
 // #define DEBUG
 #else // other platforms
   #define _ARUINO_
@@ -26,7 +26,7 @@
   const int PWM_OUTPUT_PIN = 10;
   const float PWM_FREQUENCY = 488; /* in Hz */
   const float PWM_RESOLUTION = 8;  /* in bit */
-  const int LED_PIN = LED_BUILTIN;
+  // const int LED_PIN = LED_BUILTIN;
 // #define DEBUG
 #endif
 
@@ -45,16 +45,16 @@ const float PWM_MAX_DUTY_VALUE = pow(2, PWM_RESOLUTION) - 1;
 
 // state variables
 int pwm_out_duty_in_us = PWM_CENTER; /* in us */
-int mode_counter = 0;
 int mode_out = 0;
-
+long mode_last_changed = 0;
 
 // delay on each iteration
 const int LOOP_DELAY = 200; /* in ms */
 // used as delay method, MAX_MODE_COUNTER x LOOP DELAY = time for mode step
-const int MAX_MODE_COUNTER = 3;
+// const int MAX_MODE_COUNTER = 3;
 
-int toggle_led = 0;
+// time between mode steps
+const int MODE_STEP_TIME = 500; /* in ms */
 
 // last pwm duty time
 volatile unsigned long pwm_input_duty_in_us = 0;
@@ -104,11 +104,12 @@ void setup() {
   DEBUG_INIT;
 #endif
 
-  pinMode(LED_PIN, OUTPUT);
+  // pinMode(LED_PIN, OUTPUT);
   pinMode(PWM_INPUT_PIN, INPUT);
   pinMode(PWM_OUTPUT_PIN, OUTPUT);
-  pinMode(PWM_OUTPUT_REVERSE_PIN, OUTPUT);
+  // pinMode(PWM_OUTPUT_REVERSE_PIN, OUTPUT);
 
+  mode_last_changed = millis();
 #ifdef _ARDUINO_
   attachInterrupt(PWM_INPUT_IRQ_PIN, handle_pwm_input_interrupt, CHANGE);
 #elif defined _ATTINY_
@@ -185,7 +186,7 @@ int set_output_mode(int mode_out) {
   DEBUG_PRINT("pwm duty value: ");
   DEBUG_PRINTLN(pwm_out_duty_value);
   analogWrite(PWM_OUTPUT_PIN, pwm_out_duty_value);
-
+/*
   // calculate the reverse PWM value
   int delta_pwm = pwm - PWM_LOW;
   int pwm_inv = PWM_HIGH - delta_pwm;
@@ -196,9 +197,10 @@ int set_output_mode(int mode_out) {
   DEBUG_PRINTLN(pwm_out_duty_value_int);
 
   analogWrite(PWM_OUTPUT_REVERSE_PIN, pwm_out_duty_value_inv);
-
+*/
   return 0;
 }
+
 
 void loop() {
 
@@ -210,35 +212,26 @@ void loop() {
   DEBUG_PRINT("mode_out: ");
   DEBUG_PRINTLN(mode_out);
 
-  // if flywheel is centered, set mode_counter close to MAX value in order
-  // to increase the response time once the wheel is moved
-  if (mode_in == 0) {
-    mode_counter = MAX_MODE_COUNTER - 1;
-  }
-
   // if flywheel is activated
   if (mode_in != 0) {
 
-    // increase mode counter
-    if (mode_in != mode_out) {
-      mode_counter++;
-    }
+    long delta_t = millis() - mode_last_changed;
 
-    DEBUG_PRINT("mode counter: ");
-    DEBUG_PRINTLN(mode_counter);
-
-    // if mode
-    if (mode_counter > MAX_MODE_COUNTER) {
+    if (delta_t > MODE_STEP_TIME) {
 
       int mode_delta = mode_in - mode_out;
 
       mode_out = min(max(mode_out + sign(mode_delta), -1), 1);
-      mode_counter = 0;
 
       DEBUG_PRINT("mode out update: ");
       DEBUG_PRINTLN(mode_out);
+
+      mode_last_changed = millis();
     }
+
     set_output_mode(mode_out);
+  } else {
+    mode_last_changed = millis();
   }
 
   DEBUG_PRINTLN("####");

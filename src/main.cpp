@@ -4,8 +4,8 @@
   #define _ATTINY_
   const int PWM_INPUT_PIN = PB0;   // attiny PB0->leg 5
   const int PWM_INPUT_IRQ_PIN = PCINT0; // Int 0 for pin 2 // attiny
-  const int PWM_OUTPUT_PIN = PB3;  // attiny PB3 -> leg 2
-  const int PWM_OUTPUT_REVERSE_PIN = PB4;  // attiny PB4 -> leg 3
+  const int PWM_OUTPUT_PIN = PB4;  // attiny PB3 -> leg 2
+  const int PWM_OUTPUT_REVERSE_PIN = PB3;  // attiny PB4 -> leg 3
   const float PWM_FREQUENCY = 504; /* in Hz */
   const float PWM_RESOLUTION = 8;  /* in bit */
   const int LED_PIN = PB1;
@@ -24,6 +24,7 @@
   const int PWM_INPUT_PIN = 14; // teensy 3.2
   const int PWM_INPUT_IRQ_PIN = digitalPinToInterrupt(PWM_INPUT_PIN); // teensy
   const int PWM_OUTPUT_PIN = 10;
+  const int PWM_OUTPUT_REVERSE_PIN = PB3;  // attiny PB4 -> leg 3
   const float PWM_FREQUENCY = 488; /* in Hz */
   const float PWM_RESOLUTION = 8;  /* in bit */
   // const int LED_PIN = LED_BUILTIN;
@@ -49,7 +50,7 @@ int mode_out = 0;
 long mode_last_changed = 0;
 
 // delay on each iteration
-const int LOOP_DELAY = 200; /* in ms */
+const int LOOP_DELAY = 20; /* in ms */
 // used as delay method, MAX_MODE_COUNTER x LOOP DELAY = time for mode step
 // const int MAX_MODE_COUNTER = 3;
 
@@ -80,11 +81,13 @@ volatile unsigned long pwm_start_time = 0;
 #define DEBUG_PRINTLN(x)
 #endif
 
+unsigned long last_edge_time = 0;
 // interrupt routing to calculate the duty length in us
 void handle_pwm_input_interrupt() {
 
   if (digitalRead(PWM_INPUT_PIN)) {
     pwm_start_time = micros();
+    last_edge_time = millis();
   } else {
     pwm_input_duty_in_us = micros() - pwm_start_time;
   }
@@ -107,7 +110,7 @@ void setup() {
   // pinMode(LED_PIN, OUTPUT);
   pinMode(PWM_INPUT_PIN, INPUT);
   pinMode(PWM_OUTPUT_PIN, OUTPUT);
-  // pinMode(PWM_OUTPUT_REVERSE_PIN, OUTPUT);
+  pinMode(PWM_OUTPUT_REVERSE_PIN, OUTPUT);
 
   mode_last_changed = millis();
 #ifdef _ARDUINO_
@@ -127,11 +130,19 @@ void setup() {
 
 // return the pwm value based on the irq handler and reset it to 0
 int get_pwm_duty_time_in_us_and_reset() {
-  if (pwm_input_duty_in_us > 0) {
+
+  // reset when last edge is long ago...
+  if (last_edge_time + 1000 < millis())
+  {
+    pwm_out_duty_in_us = 0;
+  }
+
+  if (pwm_input_duty_in_us > 0)
+  {
     DEBUG_PRINT("Last time ");
     DEBUG_PRINTLN(pwm_input_duty_in_us);
     int result = pwm_input_duty_in_us;
-    pwm_input_duty_in_us = 0;
+
     return result;
   }
 
@@ -155,17 +166,29 @@ int current_input_mode() {
   return -1;
 }
 
-// calculate time in us to duty value based on PWM frequency and resolution
-int convert_usec_to_duty_value(int duty_time_in_us) {
-  return map(duty_time_in_us, 0, PWM_MAX_DUTY_IN_US, 0, PWM_MAX_DUTY_VALUE);
-}
-
 int sign(int x) {
   if (x > 0)
     return 1;
   if (x < 0)
     return -1;
   return 0;
+}
+
+void do_soft_pwm(int pin, int high_time_in_us)
+{
+  unsigned long start = micros();
+
+  if (high_time_in_us < PWM_LOW || high_time_in_us > PWM_HIGH)
+  {
+    return;
+  }
+
+  digitalWrite(pin, HIGH);
+  while(start + high_time_in_us > micros())
+  {
+    // do nothing
+  }
+  digitalWrite(pin, LOW);
 }
 
 int set_output_mode(int mode_out) {
@@ -181,26 +204,16 @@ int set_output_mode(int mode_out) {
   DEBUG_PRINT("pwm: ");
   DEBUG_PRINTLN(pwm);
 
-  int pwm_out_duty_value = convert_usec_to_duty_value(pwm);
-
-  DEBUG_PRINT("pwm duty value: ");
-  DEBUG_PRINTLN(pwm_out_duty_value);
-  analogWrite(PWM_OUTPUT_PIN, pwm_out_duty_value);
-/*
+  do_soft_pwm(PWM_OUTPUT_PIN, pwm);
   // calculate the reverse PWM value
   int delta_pwm = pwm - PWM_LOW;
   int pwm_inv = PWM_HIGH - delta_pwm;
 
-  int pwm_out_duty_value_inv = convert_usec_to_duty_value(pwm_inv);
+  do_soft_pwm(PWM_OUTPUT_REVERSE_PIN, pwm_inv);
 
-  DEBUG_PRINT("pwm duty value (inv): ");
-  DEBUG_PRINTLN(pwm_out_duty_value_int);
-
-  analogWrite(PWM_OUTPUT_REVERSE_PIN, pwm_out_duty_value_inv);
-*/
   return 0;
-}
 
+}
 
 void loop() {
 
@@ -229,10 +242,10 @@ void loop() {
       mode_last_changed = millis();
     }
 
-    set_output_mode(mode_out);
   } else {
     mode_last_changed = millis();
   }
+  set_output_mode(mode_out);
 
   DEBUG_PRINTLN("####");
   delay(LOOP_DELAY);

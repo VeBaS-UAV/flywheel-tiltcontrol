@@ -40,7 +40,7 @@ const int PWM_UPPER_BOUND = 1900;   /* in us */
 const int PWM_CTL_HYSTERESIS = 100; /* in us */
 
 // delay on each iteration
-const int LOOP_DELAY_IN_MS = 20; /* in ms */
+const int LOOP_DELAY_IN_MS = 10; /* in ms */
 // time between mode steps
 const int LONG_PRESS_TIME_IN_MS = 500; /* in ms */
 
@@ -202,6 +202,8 @@ int set_output_mode(int mode_out) {
 
 void loop() {
 
+  unsigned long loop_start = micros();
+
   int mode_input = current_input_mode();
 
   DEBUG_PRINT("mode_in: ");
@@ -232,5 +234,11 @@ void loop() {
   set_output_mode(mode_out);
 
   DEBUG_PRINTLN("####");
-  delay(LOOP_DELAY_IN_MS);
+
+  unsigned long wait_until_micros = loop_start + LOOP_DELAY_IN_MS*1000;
+
+  while(micros() < wait_until_micros)
+  {
+
+  }
 }
